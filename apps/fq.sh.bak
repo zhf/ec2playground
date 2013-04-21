@@ -1,0 +1,20 @@
+source $DEV_ETC/aws/tunnel.cfg
+
+if test -n "$(ps -acx | grep autossh)"; then
+	echo "Autossh is already running."
+	read -p "Kill all and continue? (y/n)"
+	[ $REPLY == 'n' ] && exit
+	killall -quit autossh
+fi
+
+lan=127.0.0.1:$SOCKS5_PORT
+
+DIR=$(dirname $0)
+. $DIR/choose.sh
+echo "Tunnel ..."
+if choose "-c running"; then
+	printf "Tunneling instance %s @ %s...\n" $SEL_EC2_IID $SEL_EC2_REGION
+	ssh -v -p $SSH_PORT -N -o "ServerAliveInterval 20" -D $lan -i $SEL_EC2_CERT $SEL_EC2_LOGIN@$SEL_EC2_IP
+	. $DIR/log.sh
+	# $DIR/check-tunnel.sh $lan
+fi

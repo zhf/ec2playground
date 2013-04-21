@@ -1,0 +1,53 @@
+DIR=`dirname $0`
+. $DIR/formats.sh
+
+function do_init
+{
+	local script_folder=$DEV_ETC/aws/init
+	local tar_name=`basename $script_folder`
+	local tmp_tar=$DEV_TMP/aws/$tar_name.tar
+	# Disable Mac OS X's copyfile feature
+	# http://unix.stackexchange.com/questions/9665/create-tar-archive-of-a-directory-except-for-hidden-files
+	[[ `uname` == 'Darwin' ]] && export COPYFILE_DISABLE=1 
+	tar -cLf $tmp_tar -C `dirname $script_folder` $tar_name/
+	for i in {1..5}
+	do
+		printf $COLOR$CYAN
+		scp -o 'ConnectTimeout 5' -i $SEL_EC2_CERT $tmp_tar $SEL_EC2_LOGIN@$SEL_EC2_IP:~
+		if (( $? == 0 )); then
+			ssh -t -i $SEL_EC2_CERT \
+				$SEL_EC2_LOGIN@$SEL_EC2_IP \
+				'tar xf ~/'$tar_name'.tar;
+				rm ~/'$tar_name'.tar;
+				bash ~/'$tar_name'/setup.sh '$SEL_EC2_ZONE';
+				sleep 2'
+			printf $RESET
+			break
+		fi
+		printf $RESET
+		sleep 2
+		printf "$BRIGHT$RED `basename $0`: scp failed. Trying again ...$RESET\n"
+	done
+	
+	if (( $? != 0 )); then
+		printf "$BRIGHT$RED `basename $0`: scp failed. Timeout!$RESET\n"
+		exit -1
+	fi
+										
+	. $DIR/log.sh
+	rm $tmp_tar
+}
+
+function manually_choose
+{
+	. $DIR/choose.sh
+
+	echo "Choose an instance to initialize:"
+
+	if choose "-c running"; then
+		echo "Initializing instance ..."
+	fi
+}
+
+test -z "$SEL_EC2_IID" && manually_choose
+test -n "$SEL_EC2_IID" && do_init
